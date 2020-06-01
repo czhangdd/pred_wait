@@ -167,5 +167,5 @@ from wait_table
 join delivery_num_nearby dnn
   on dnn.delivery_id = wait_table.delivery_id and
      dnn.assignment_run_id = wait_table.assignment_run_id
-limit 10
+-- limit 10
 )

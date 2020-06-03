@@ -119,8 +119,8 @@ select * from wait_avg_store_assign sample(20)
 ---------------------------------------------
 --------------- wait_geo table --------------
 ---------------------------------------------
-drop table if exists wait_geo_table;
-create table wait_geo_table as (
+drop table if exists CHIZHANG.wait_geo_table;
+create table CHIZHANG.wait_geo_table as (
 -- get distance from one shift to one store, for each assignment_run_id
 with delivery_distance as (
 select
@@ -134,9 +134,8 @@ select
        wait_table.EXT_POINT_LONG,
        haversine(shift_lat, SHIFT_LNG, EXT_POINT_LAT, EXT_POINT_LONG) as distance,
        case when distance<2 then 1 else 0 end as is_nearby,
-       case when (is_nearby=1 and IS_SHIFT_BUSY=0) then 'nearby_idle' 
-            when (is_nearby=1 and IS_SHIFT_BUSY=1) then 'nearby_busy' 
-            else 'faraway' end as dasher_status
+       case when (is_nearby=1 and IS_SHIFT_BUSY=0) then 'dasher_nearby_idle' 
+            when IS_SHIFT_BUSY=1 then 'dasher_busy' end as dasher_status
 
 from  wait_table
 join four_weeks_geo_candidate_shifts geo
@@ -149,8 +148,8 @@ delivery_num_nearby as (
 select
     delivery_id,
     assignment_run_id,
-    sum(case when dasher_status = 'nearby_idle' then 1 else 0 end) as num_nearby_idle,
-    sum(case when dasher_status = 'nearby_busy' then 1 else 0 end) as num_nearby_busy
+    sum(case when dasher_status = 'dasher_nearby_idle' then 1 else 0 end) as num_nearby_idle,
+    sum(case when dasher_status = 'dasher_busy' then 1 else 0 end) as num_busy
     
 from delivery_distance
 group by 1, 2
@@ -158,7 +157,7 @@ group by 1, 2
 
 select wait_table.*,
        dnn.num_nearby_idle,
-       dnn.num_nearby_busy
+       dnn.num_busy
 from wait_table
 join delivery_num_nearby dnn
   on dnn.delivery_id = wait_table.delivery_id and

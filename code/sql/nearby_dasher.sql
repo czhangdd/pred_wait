@@ -7,23 +7,19 @@ set exp_end = '2020-04-15';
 drop table if exists four_weeks_geo_candidate_shifts;
 create table four_weeks_geo_candidate_shifts as (
 select 
-    init_shift_candidates.EVENT_CREATED_AT as init_shift_candidates_event_created_at,
-    candidate_shifts.EVENT_CREATED_AT as candidate_event_created_at,
-    SHIFT_LAT,
-    SHIFT_LNG,
-    case when IS_SHIFT_BUSY='false' then 0
+    EVENT_CREATED_AT
+    , DELIVERY_ID
+    , SHIFT_LAT
+    , SHIFT_LNG
+    , case when IS_SHIFT_BUSY='false' then 0
          when IS_SHIFT_BUSY='true' then 1
-         else -1 end as IS_SHIFT_BUSY,
-    init_shift_candidates.SP_ID,
-    init_shift_candidates.ASSIGNMENT_RUN_ID,
-    init_shift_candidates.SHIFT_ID,
-    candidate_shifts.delivery_id
-  from INGEST_DEEPRED_SERVER_EVENTS_PROD.EVENT_DEEP_RED_OPTIMIZER_CANDIDATE_ASSIGNMENTS candidate_shifts
-  join Ingest_deepred_server_events_prod.event_deep_red_initial_shift_candidates init_shift_candidates
-    on candidate_shifts.ASSIGNMENT_RUN_ID = init_shift_candidates.ASSIGNMENT_RUN_ID and
-       candidate_shifts.SHIFT_ID = init_shift_candidates.SHIFT_ID
-  where candidate_shifts.EVENT_CREATED_AT between $exp_start and $exp_end and  --0415
-        init_shift_candidates.EVENT_CREATED_AT between $exp_start and $exp_end
+         else -1 end as IS_SHIFT_BUSY
+    , SP_ID
+    , ASSIGNMENT_RUN_ID
+    , SHIFT_ID
+  from Ingest_deepred_server_events_prod.event_deep_red_initial_shift_candidates
+  where EVENT_CREATED_AT between $exp_start and $exp_end
+  and IS_PROD='True'
 );
 
 ------------------------------------------

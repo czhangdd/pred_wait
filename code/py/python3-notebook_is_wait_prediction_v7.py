@@ -44,7 +44,7 @@ def create_store_level_hist_feat(df):
 
 wait_thr = 5 * 60
 long_wait_thr = 10 * 60
-delay_thr = 2 * 60
+delay_thr = 0
 
 datasets['3_feat_v2_more_hist'].shape, datasets['4_feat_filter'].shape, datasets['6_wait_geo'].shape
 

@@ -54,24 +54,35 @@ df.columns = map(str.lower, df.columns)
 print(df.shape)
 print(df.head(5))
 
-df = create_store_level_hist_feat(df)
+# df['num_nearby_idle'].max(), df['num_busy'].max(), df['flf'].quantile(0.999), df['tip'].quantile(0.999)
+# print(df.describe())
 
+f = 'pred_horizon'
+
+print('raw shape', df.shape)
+df_clean = df.copy()
+df_clean = df_clean[df_clean['flf'] < 5]
+df_clean = df_clean[(df_clean['pred_horizon'] < 60 * 60) & (df_clean['pred_horizon'] >= 0)]
+
+print('after remove pred_horizon and flf, shape', df_clean.shape)
+
+df_clean[f].min(), df_clean[f].max()
+
+## Outlier removal
 print(">>> check NAs")
 print(df.isna().sum() / len(df))
 
-## Outlier removal
-df = df[df['wait_before_ready_time'].notna()]
-df.reindex()
-print('>>> after dropping NAs in wait_time (label)', df.shape)
+df_clean = df_clean[df_clean['wait_before_ready_time'].notna()]
+df_clean.reindex()
+print('>>> after dropping NAs in wait_time (label)', df_clean.shape)
 print('>>> fill NAs with 0')
-df = df.fillna(0)
+df_clean = df_clean.fillna(0)
+df = df_clean
+
+df = create_store_level_hist_feat(df)
 
 print(df.head(5))
 print(df.columns)
-
-print('before remove pred_horizon<0, shape', df.shape)
-df = df[df['pred_horizon'] >= 0]
-print('after remove pred_horizon<0, shape', df.shape)
 
 # add lateness labels
 df['label_wait'] = df['wait_before_ready_time'] > wait_thr
@@ -91,7 +102,7 @@ print(df.head(10))
 
 feat_hist_agg = ['wait_before_ready_time_mean', 'd2r_duration_mean', 'wait_before_ready_time_max',\
                  'd2r_duration_min', 'pred_horizon_mean', 'wait_before_ready_time_min' , 'avg_num_assigns']
-feat_real_time = ['tip', 'flf', 'pred_horizon', 'num_nearby_busy', 'num_nearby_idle']
+feat_real_time = ['tip', 'flf', 'pred_horizon', 'num_busy', 'num_nearby_idle']
 
 cols = feat_hist_agg + feat_real_time
 for f in cols:
@@ -137,7 +148,7 @@ for i in range(X_train_scaled.shape[1]):
 # clf = LogisticRegression(random_state=0).fit(X_train.values, y_train.values)
 # y_pred = clf.predict(X_test)
 
-clf = LogisticRegression(random_state=0).fit(X_train_scaled, y_train.values)
+clf = LogisticRegression(random_state=0, solver='newton-cg', multi_class='multinomial').fit(X_train_scaled, y_train.values)
 y_pred = clf.predict(X_test_scaled)
 y_pred_proba = clf.predict_proba(X_test_scaled)
 
@@ -200,15 +211,58 @@ print('conf matrix (percentage of all data)\n', np.array_str(conf_mat/len(y_test
 
 # eval_model(y_test, y_pred_random_search, y_pred_random_search_proba)
 
-coef = clf.coef_[0]
-coef_hist = coef[:7]
-coef_realtime = coef[7:]
-intercept = clf.intercept_[0]
-print(coef_hist.shape, coef_realtime.shape)
-model_param = dict(zip(cols,coef))
+clf.coef_.shape
+clf.intercept_.shape
+
+# #binary model
+# coef = clf.coef_[0]
+# coef_hist = coef[:7]
+# coef_realtime = coef[7:]
+# intercept = clf.intercept_[0]
+# print(coef_hist.shape, coef_realtime.shape)
+# model_param = dict(zip(cols,coef))
+# model_param['intercept'] = intercept
+
+# model_param
+
+#multi-class model
+coef = clf.coef_
+coef_hist = coef[:, :7]
+coef_realtime = coef[:, 7:]
+intercept = clf.intercept_
+print(coef_hist.shape, coef_realtime.shape, intercept.shape)
+model_param = dict(zip(cols,coef.T))
 model_param['intercept'] = intercept
 
 model_param
+
+X_test_scaled.shape, clf.coef_.T.shape, clf.intercept_.shape
+
+# softmax, multi_class=multinomial in LR
+r = np.matmul(X_test_scaled, clf.coef_.T) + clf.intercept_
+# print(r)
+r_exp = np.exp(r)
+print(r_exp.shape, np.sum(r_exp, axis=1).shape)
+
+prob_softmax = r_exp/r_exp.sum(axis=1)[:,None]
+print(prob_softmax)
+pred_label = np.argmax(prob_softmax, axis=1)
+print(pred_label.shape)
+print(np.mean(pred_label==2))
+
+# one-vs-rest. not quite correct...
+# sum_rest = r_exp[:, :-1].sum(axis=1)
+# print(sum_rest.shape)
+# p2 = 1/(1+sum_rest)
+# p1 = p2 * np.exp(r[:, 1])
+# p0 = p2 * np.exp(r[:, 0])
+# print(p2)
+# print(p1)
+# print(p0)
+# prob = np.stack((np.array(p0), np.array(p1), np.array(p2))).T
+# pred_label = np.argmax(prob, axis=1)
+
+# print(np.mean(pred_label==2))
 
 df_train_scaled = pd.DataFrame(data=X_train_scaled, columns=X_train.columns, index=X_train.index)
 
@@ -226,17 +280,26 @@ print('num_stores', num_stores)
 assert df_store_level.shape[0] == num_stores, 'unmatched after dropping dup'
 
 
-# coef = list(clf.coef_[0])[:7]
-# print(coef)
+df_store_level[feat_hist_agg].shape, coef_hist.shape
 
-# intercept = clf.intercept_[0]
+# #binary model
+# hist_agg_value = df_store_level[feat_hist_agg] * coef_hist
+# hist_agg_value['intercept'] = intercept
+# hist_agg_value = hist_agg_value.sum(axis=1)
+# hist_agg_value = hist_agg_value.to_frame()
+# hist_agg_value.columns = ['value']
+# print(hist_agg_value)
+
+#multi-class model
+hist_agg_value = df_store_level[feat_hist_agg].dot(coef_hist.T)
+# print(hist_agg_value.head(5))
+hist_agg_value += intercept
 # print(intercept)
-
-hist_agg_value = df_store_level[feat_hist_agg] * coef_hist
-hist_agg_value['intercept'] = intercept
-hist_agg_value = hist_agg_value.sum(axis=1)
-hist_agg_value = hist_agg_value.to_frame()
-hist_agg_value.columns = ['value']
+# print(hist_agg_value.head(5))
+# hist_agg_value['intercept'] = intercept
+# hist_agg_value = hist_agg_value.sum(axis=1)
+# hist_agg_value = hist_agg_value.to_frame()
+# hist_agg_value.columns = ['value']
 print(hist_agg_value)
 
 assert all(df_store_level.index == hist_agg_value.index), 'unmatched index'
@@ -244,8 +307,17 @@ assert all(df_store_level.index == hist_agg_value.index), 'unmatched index'
 df_pre_calculated_value = df_store_level['store_id'].to_frame().join(hist_agg_value)
 print(df_pre_calculated_value)
 
-default_value = df_pre_calculated_value['value'].mean()
-df_pre_calculated_value.loc[len(df_pre_calculated_value)]=['no_match', default_value] 
+df_pre_calculated_value.mean()
+
+#binary model
+# default_value = df_pre_calculated_value['value'].mean()
+# df_pre_calculated_value.loc[len(df_pre_calculated_value)]=['no_match', default_value] 
+# print(df_pre_calculated_value.tail(4))
+
+#multi-class model
+# print(df_pre_calculated_value.tail(4))
+df_pre_calculated_value.loc['mean'] = df_pre_calculated_value.mean()
+df_pre_calculated_value.loc['mean', 'store_id'] = -1
 print(df_pre_calculated_value.tail(4))
 
 import notebooksalamode as mode

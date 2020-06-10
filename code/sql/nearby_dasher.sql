@@ -164,4 +164,6 @@ join delivery_num_nearby dnn
   on dnn.delivery_id = wait_table.delivery_id and
      dnn.assignment_run_id = wait_table.assignment_run_id
 -- limit 10
-)
+);
+
+grant select on CHIZHANG.wait_geo_table to role read_only_users;

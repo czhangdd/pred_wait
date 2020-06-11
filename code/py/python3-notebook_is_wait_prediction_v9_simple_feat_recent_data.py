@@ -14,6 +14,7 @@ from sklearn import svm
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from datetime import datetime, timedelta
 from sklearn.feature_selection import RFECV
+import collections
 
 def eval_model(y_test, y_pred, y_pred_proba):
   acc_score = accuracy_score(y_test, y_pred)
@@ -30,6 +31,20 @@ def eval_model(y_test, y_pred, y_pred_proba):
   print('conf matrix (percentage of all data)\n', conf_mat/len(y_test))
   print("absolute values of tn", tn, "fp", fp, "fn", fn, "tp", tp)
 
+def eval_model_multi_class(y_test, y_pred, y_pred_proba, labels):
+  counter = collections.Counter(y_test.values)
+  freq = [counter[i]/len(y_test) for i in np.unique(y_test.values)]
+  print('freq', freq)
+  
+  acc_score = accuracy_score(y_test, y_pred)
+  print('acc_score', acc_score)
+  
+  logloss = log_loss(y_test, y_pred_proba)
+  print('log loss pred', logloss)
+
+  conf_mat = confusion_matrix(y_test, y_pred, labels=labels)
+  print('conf matrix (percentage of all data)\n', np.array_str(conf_mat/len(y_test)*100, precision=4, suppress_small=True))
+
 def create_store_level_hist_feat(df):
   d = {'wait_before_ready_time': ['mean', 'min', 'max'], 'd2r_duration': ['mean', 'min', 'max'], 'pred_horizon': ['mean', 'min', 'max']}
   df_agg = df.groupby(['store_id'], as_index=False).agg(d)
@@ -45,7 +60,7 @@ long_wait_thr = 10 * 60
 delay_thr = 0
 
 # df = datasets['4_feat_filter']
-df = datasets['6_wait_geo']
+df = datasets['7_wait_geo_remove_store']
 df.columns = map(str.lower, df.columns)
 raw_data_size = df.shape
 print("raw_data_size", raw_data_size)
@@ -150,112 +165,27 @@ selector.support_
 
 print(selector.support_)
 
-# Create interaction term (not polynomial features)
-from sklearn.preprocessing import PolynomialFeatures
-from statsmodels.regression import linear_model
-
-interaction = PolynomialFeatures(degree=2, include_bias=False, interaction_only=True)
-X_train_scaled_selected = X_train_scaled[feat_real_time]
-X_test_scaled_selected = X_test_scaled[feat_real_time]
-
-
-X_train_scaled_selected_inter = interaction.fit_transform(X_train_scaled_selected)
-
-X_train_scaled_selected_inter = interaction.fit_transform(X_test_scaled_selected)
-
-
-# X_train_scaled_selected.shape, X_train_scaled_selected_inter.shape
-
-# print(feat_real_time)
-
-
-X_train_scaled_selected_inter.shape, y_train.values.shape
-
-interaction_model = linear_model.OLS(y_train.values, X_train_scaled_selected_inter).fit()
-# print(feat_real_time)
-# print(interaction_model)
-interaction_model.pvalues[interaction_model.pvalues < 0.05]
-# X_train_scaled_selected_inter.shape, X_train_scaled.shape
-
-interaction_model.summary()
-
-
-inter_items.reindex(X_train_scaled.index)
-
-tmp = X_train_scaled_selected_inter[:, [9, 12]]
-# inter_items = pd.DataFrame(tmp, columns=['inter'+ str(i) for i in range(tmp.shape[1])]) 
-# X_train_scaled_new = pd.concat([X_train_scaled, inter_items], axis=1, ignore_index=True)
-
-
-inter_items.shape, X_train_scaled.shape, X_train_scaled_new.shape
-X_train_scaled_new.head(5)
-
-
-X_train_scaled_new = np.concatenate((X_train_scaled_selected_inter, tmp), axis=1)
-# X_train_scaled.append(inter_items, ignore_index=True)
-# X_train_scaled.shape
-
-np.isnan(X_train_scaled_new).sum() #.isna().sum()
-
-X_train_scaled = X_train_scaled_new
-
 X_train_scaled_reduced = X_train_scaled[sorted_corr_col[1:6]]
 X_test_scaled_reduced = X_test_scaled[sorted_corr_col[1:6]]
 
-clf_reduced = LogisticRegression(random_state=0, solver='newton-cg', multi_class='multinomial').fit(X_train_scaled_reduced, y_train.values)
+clf_reduced = LogisticRegression(random_state=0, solver='saga', multi_class='multinomial').fit(X_train_scaled_reduced, y_train.values) #newton
 y_pred = clf_reduced.predict(X_test_scaled_reduced)
 y_pred_proba = clf_reduced.predict_proba(X_test_scaled_reduced)
-acc_score = accuracy_score(y_test, y_pred)
 
-acc_score = accuracy_score(y_test, y_pred)
-logloss = log_loss(y_test, y_pred_proba)
-conf_mat = confusion_matrix(y_test, y_pred)
-
-import collections
-counter = collections.Counter(y_test.values)
-freq = [counter[i]/len(y_test) for i in [-1, 0, 1]]
-print(freq)
-# print('true pct in testing data of no-wait', y_test(y_test==0))
-print('acc', acc_score)
-print('log loss pred', logloss)
-print('conf matrix (percentage of all data)\n', np.array_str(conf_mat/len(y_test)*100, precision=4, suppress_small=True) )
-
-X_train_scaled_reduced.shape, y_train.shape, X_test_scaled_reduced.shape, y_test.shape
+print('classes', clf_reduced.classes_)
+eval_model_multi_class(y_test, y_pred, y_pred_proba, labels=clf_reduced.classes_)
 
 # Multi-class
 # LR default
 # clf = LogisticRegression(random_state=0).fit(X_train.values, y_train.values)
 # y_pred = clf.predict(X_test)
 
-clf = LogisticRegression(random_state=0, solver='newton-cg', multi_class='multinomial').fit(X_train_scaled, y_train.values)
+clf = LogisticRegression(random_state=0, solver='saga', multi_class='multinomial').fit(X_train_scaled, y_train.values)
 y_pred = clf.predict(X_test_scaled)
 y_pred_proba = clf.predict_proba(X_test_scaled)
 
-
-acc_score = accuracy_score(y_test, y_pred)
-# logloss = log_loss(y_test, y_pred)
-# logloss_baseline = log_loss(y_test, np.zeros(len(y_test)))
-
-# print(acc_score)
-# confusion_matrix(y_test, y_pred)/len(y_test)
-
-
-acc_score = accuracy_score(y_test, y_pred)
-logloss = log_loss(y_test, y_pred_proba)
-# logloss_baseline = log_loss(y_test, np.zeros(len(y_test)))
-# rocauc = roc_auc_score(y_test, y_pred_proba[:, 1])
-conf_mat = confusion_matrix(y_test, y_pred)
-# tn, fp, fn, tp = conf_mat.ravel()
-
-import collections
-counter = collections.Counter(y_test.values)
-freq = [counter[i]/len(y_test) for i in [-1, 0, 1]]
-print(freq)
-# print('true pct in testing data of no-wait', y_test(y_test==0))
-print('acc', acc_score)
-print('log loss pred', logloss)
-print('conf matrix (percentage of all data)\n', np.array_str(conf_mat/len(y_test)*100, precision=4, suppress_small=True) )
-# print("absolute values of tn", tn, "fp", fp, "fn", fn, "tp", tp)
+print('classes', clf_reduced.classes_)
+eval_model_multi_class(y_test, y_pred, y_pred_proba, labels=clf_reduced.classes_)
 
 # Create regularization penalty space
 penalty = ['l1', 'l2']
@@ -266,122 +196,81 @@ C = uniform(loc=0, scale=4)
 # Create hyperparameter options
 hyperparameters = dict(C=C, penalty=penalty)
 
-logistic = LogisticRegression(random_state=0, solver='newton-cg', multi_class='multinomial').fit(X_train_scaled, y_train.values)
+logistic = LogisticRegression(random_state=0, solver='saga', multi_class='multinomial').fit(X_train_scaled, y_train.values)
 
-clf = RandomizedSearchCV(logistic, hyperparameters, random_state=1, n_iter=10, cv=5, verbose=2, n_jobs=-1)
+clf_randomsearch = RandomizedSearchCV(logistic, hyperparameters, random_state=1, n_iter=10, cv=5, verbose=2, n_jobs=2).fit(X_train_scaled, y_train.values)
+
+y_pred = clf_randomsearch.predict(X_test_scaled)
+y_pred_proba = clf_randomsearch.predict_proba(X_test_scaled)
+
+
+print('best params', clf_randomsearch.best_params_)
+
+# random search best params {'C': 2.67898414721392, 'penalty': 'l2'}
+print('classes', clf_randomsearch.best_estimator_.classes_)
+eval_model_multi_class(y_test, y_pred, y_pred_proba, labels=clf_randomsearch.best_estimator_.classes_)
+
+def my_custom_loss_func(ground_truth, predictions):
+    res = ground_truth.copy()
+    res['hit'] = ground_truth == predictions
+    res['penalty'] = 0
+    res.loc[(res['hit'] == False) & (res['label'] == 'late'), 'penalty'] = 2 
+    res.loc[(res['hit'] == False) & (res['label'] == 'early'), 'penalty'] = 1 
+
+    return np.mean(res['penalty'])
+    
+    
+# Create regularization penalty space
+penalty = ['l1', 'l2']
+
+# Create regularization hyperparameter distribution using uniform distribution
+C = uniform(loc=0, scale=4)
+
+# Create hyperparameter options
+hyperparameters = dict(C=C, penalty=penalty)
+
+logistic = LogisticRegression(random_state=0, solver='saga', multi_class='multinomial').fit(X_train_scaled, y_train.values)
+
+clf = RandomizedSearchCV(logistic, hyperparameters, random_state=1, n_iter=10, cv=5, verbose=2, n_jobs=-1, scoring=my_custom_loss_func).fit(X_train_scaled, y_train.values)
 
 y_pred = clf.predict(X_test_scaled)
 y_pred_proba = clf.predict_proba(X_test_scaled)
 
-
-acc_score = accuracy_score(y_test, y_pred)
-# logloss = log_loss(y_test, y_pred)
-# logloss_baseline = log_loss(y_test, np.zeros(len(y_test)))
-
-# print(acc_score)
-# confusion_matrix(y_test, y_pred)/len(y_test)
-
-
-acc_score = accuracy_score(y_test, y_pred)
-logloss = log_loss(y_test, y_pred_proba)
-# logloss_baseline = log_loss(y_test, np.zeros(len(y_test)))
-# rocauc = roc_auc_score(y_test, y_pred_proba[:, 1])
-conf_mat = confusion_matrix(y_test, y_pred)
-# tn, fp, fn, tp = conf_mat.ravel()
-
-counter = collections.Counter(y_test.values)
-freq = [counter[i]/len(y_test) for i in [-1, 0, 1]]
-print(freq)
-# print('true pct in testing data of no-wait', y_test(y_test==0))
-print('acc', acc_score)
-print('log loss pred', logloss)
-print('conf matrix (percentage of all data)\n', np.array_str(conf_mat/len(y_test)*100, precision=4, suppress_small=True) )
-
 print('best estimator', best_model.best_params_)
 
-# # Binary
-# # LR default
-# # clf = LogisticRegression(random_state=0).fit(X_train.values, y_train.values)
-# # y_pred = clf.predict(X_test)
-# y_train_binary = df.loc[train_index, 'label_wait']
-# y_test_binary = df.loc[test_index, 'label_wait']
 
-# clf_binary = LogisticRegression(random_state=0).fit(X_train_scaled, y_train_binary.values)
-# y_pred_binary = clf_binary.predict(X_test_scaled)
-# y_pred_proba_binary = clf_binary.predict_proba(X_test_scaled)
-
-# eval_model(y_test_binary, y_pred_binary, y_pred_proba_binary)
-
-# # LR random search
-# logistic_default = LogisticRegression()
-
-# # Create regularization penalty space
-# penalty = ['l1', 'l2']
-# # Create regularization hyperparameter distribution using uniform distribution
-# C = uniform(loc=0, scale=4)
-# # Create hyperparameter options
-# hyperparameters = dict(C=C, penalty=penalty)
-
-# random_search = RandomizedSearchCV(logistic_default, hyperparameters, random_state=1, n_iter=100, cv=5, verbose=0, n_jobs=1)
-# clf_random_search = random_search.fit(X_train_scaled, y_train.values)
-
-# y_pred_random_search = clf_random_search.predict(X_test_scaled)
-# y_pred_random_search_proba = clf_random_search.predict_proba(X_test_scaled)
-
-# eval_model(y_test, y_pred_random_search, y_pred_random_search_proba)
-
-clf.coef_.shape
-clf.intercept_.shape
-
-# #binary model
-# coef = clf.coef_[0]
-# coef_hist = coef[:7]
-# coef_realtime = coef[7:]
-# intercept = clf.intercept_[0]
-# print(coef_hist.shape, coef_realtime.shape)
-# model_param = dict(zip(cols,coef))
-# model_param['intercept'] = intercept
-
-# model_param
+print('classes', clf_reduced.classes_)
+eval_model_multi_class(y_test, y_pred, y_pred_proba, labels=clf_reduced.classes_)
 
 #multi-class model
-coef = clf.coef_
+coef = clf_randomsearch.best_estimator_.coef_
 coef_hist = coef[:, :7]
 coef_realtime = coef[:, 7:]
-intercept = clf.intercept_
+intercept = clf_randomsearch.best_estimator_.intercept_
 print(coef_hist.shape, coef_realtime.shape, intercept.shape)
 model_param = dict(zip(cols,coef.T))
 model_param['intercept'] = intercept
 
 model_param
 
-X_test_scaled.shape, clf.coef_.T.shape, clf.intercept_.shape
+X_test_scaled.shape, clf_randomsearch.best_estimator_.coef_.T.shape, clf_randomsearch.best_estimator_.intercept_.shape
 
 # softmax, multi_class=multinomial in LR
-r = np.matmul(X_test_scaled, clf.coef_.T) + clf.intercept_
+r = np.matmul(X_test_scaled.values, clf_randomsearch.best_estimator_.coef_.T) + clf_randomsearch.best_estimator_.intercept_
 # print(r)
 r_exp = np.exp(r)
-print(r_exp.shape, np.sum(r_exp, axis=1).shape)
+# print(r_exp.shape, np.sum(r_exp, axis=1).shape)
 
 prob_softmax = r_exp/r_exp.sum(axis=1)[:,None]
-print(prob_softmax)
+# print(prob_softmax)
 pred_label = np.argmax(prob_softmax, axis=1)
 print(pred_label.shape)
-print(np.mean(pred_label==2))
+print(np.mean(pred_label==0))
 
-# one-vs-rest. not quite correct...
-# sum_rest = r_exp[:, :-1].sum(axis=1)
-# print(sum_rest.shape)
-# p2 = 1/(1+sum_rest)
-# p1 = p2 * np.exp(r[:, 1])
-# p0 = p2 * np.exp(r[:, 0])
-# print(p2)
-# print(p1)
-# print(p0)
-# prob = np.stack((np.array(p0), np.array(p1), np.array(p2))).T
-# pred_label = np.argmax(prob, axis=1)
+clf_randomsearch.classes_
 
-# print(np.mean(pred_label==2))
+print(((y_pred == 'late') * (y_test == 'early')).sum()/len(y_test))
+print(((y_pred == 'early') * (y_test == 'early')).sum()/len(y_test))
 
 df_train_scaled = pd.DataFrame(data=X_train_scaled, columns=X_train.columns, index=X_train.index)
 
@@ -401,14 +290,6 @@ assert df_store_level.shape[0] == num_stores, 'unmatched after dropping dup'
 
 df_store_level[feat_hist_agg].shape, coef_hist.shape
 
-# #binary model
-# hist_agg_value = df_store_level[feat_hist_agg] * coef_hist
-# hist_agg_value['intercept'] = intercept
-# hist_agg_value = hist_agg_value.sum(axis=1)
-# hist_agg_value = hist_agg_value.to_frame()
-# hist_agg_value.columns = ['value']
-# print(hist_agg_value)
-
 #multi-class model
 hist_agg_value = df_store_level[feat_hist_agg].dot(coef_hist.T)
 # print(hist_agg_value.head(5))
@@ -424,14 +305,10 @@ print(hist_agg_value)
 assert all(df_store_level.index == hist_agg_value.index), 'unmatched index'
 
 df_pre_calculated_value = df_store_level['store_id'].to_frame().join(hist_agg_value)
+df_pre_calculated_value.columns = [['store_id'] + list(clf_randomsearch.best_estimator_.classes_)]
 print(df_pre_calculated_value)
 
 df_pre_calculated_value.mean()
-
-#binary model
-# default_value = df_pre_calculated_value['value'].mean()
-# df_pre_calculated_value.loc[len(df_pre_calculated_value)]=['no_match', default_value] 
-# print(df_pre_calculated_value.tail(4))
 
 #multi-class model
 # print(df_pre_calculated_value.tail(4))
@@ -469,15 +346,14 @@ print('in testing not in pre_cal', len(set(tmp) - set(pre_cal_store)), 'pct', le
 
 valid_X_test_pre_cal = pd.merge(valid_X_test, df_pre_calculated_value, on='store_id', how='left')
 assert valid_X_test_pre_cal.shape[0] == valid_X_test.shape[0], 'unmatched shape'
-assert valid_X_test_pre_cal['value'].isna().sum() == 0, 'na found'
+assert valid_X_test_pre_cal.isna().sum().any(), 'na found'
 
-result = valid_X_test_pre_cal['value']
-+10.64552989 * (valid_X_test_pre_cal['tip']/20000.0)
--22.46182226 * (valid_X_test_pre_cal['flf']/19.0)
-+46.03914325 * (valid_X_test_pre_cal['pred_horizon']/8575.0)
-
-proba = 1/(1+np.exp(-result))
-proba
+# result = valid_X_test_pre_cal['value']
+# +10.64552989 * (valid_X_test_pre_cal['tip']/20000.0)
+# -22.46182226 * (valid_X_test_pre_cal['flf']/19.0)
+# +46.03914325 * (valid_X_test_pre_cal['pred_horizon']/8575.0)
+# proba = 1/(1+np.exp(-result))
+# proba
 # binary = proba >=0.5
 
 
@@ -500,20 +376,22 @@ plt.legend()
 plt.title('Histogram of wait_before_ready_time (all data)')
 
 def check_if_no_wait(X, y, y_pred, pred_horizon_thr):
-  close_index = X[X['pred_horizon'] < pred_horizon_thr].index
-  df_y_pred = pd.DataFrame(data=y_pred, index=y.index)
-  pct = df_y_pred.loc[close_index].mean().values[0]
-  print(pct, 'are predicted as wait when pred_horizon is', pred_horizon_thr, 'seconds')
+  close_index = X[X['pred_horizon'] < pred_horizon_thr*60].index
+  df_y_pred = pd.DataFrame(data=y_pred, index=y.index, columns=['pred'])
+  df_small_horizon = df_y_pred.loc[close_index, 'pred']
+  # print(df_small_horizon)
+  pct = df_small_horizon.value_counts()['early']/len(df_small_horizon)
+  print(pct, 'are predicted as wait when pred_horizon is', pred_horizon_thr, 'min')
   return pct
 
 #check if predict 'no wait' when time is close to food ready time
 pct = []
-pred_horizon_thr = [240, 300, 360, 480, 600, 720, 840, 960]
+pred_horizon_thr = [3, 5, 6, 7, 10]
 for thr in pred_horizon_thr:
   pct.append(check_if_no_wait(X_test, y_test, y_pred, thr))
 
 plt.plot(pred_horizon_thr, pct)
-plt.xlabel('pred_horizon (seconds)')
+plt.xlabel('pred_horizon (min)')
 plt.ylabel('pct of wait predicted by model')
 
 test_sampled_index = X_test.sample(1000).index
@@ -522,22 +400,53 @@ X_test_sampled = X_test.loc[test_sampled_index].copy()
 y_test_sampled = y_test.loc[test_sampled_index].copy()
 
 res = []
-ranges = range(0, 60*13, 60)
+ranges = range(0, 60*20, 60)
 for var in ranges:
   # print(var)
   X_test_sampled['pred_horizon'] = var
   X_test_sampled_scaled = scaler.transform(X_test_sampled)
-  y_pred_sampled_scaled = clf.predict(X_test_sampled_scaled)
-  y_pred_sampled_scaled_proba = clf.predict_proba(X_test_sampled_scaled)
+  y_pred_sampled_scaled = clf_randomsearch.predict(X_test_sampled_scaled)
+  # y_pred_sampled_scaled_proba = clf_randomsearch.predict_proba(X_test_sampled_scaled)
   # eval_model(y_test_sampled, y_pred_sampled_scaled, y_pred_sampled_scaled_proba)
   res.append(y_pred_sampled_scaled)
 
 res = np.array(res)
-res_mean = res.mean(axis=1)
+# print(res, res.shape)
 
-plt.plot(list(ranges), res_mean)
+res[res=='early'] = 1
+res[res=='ontime'] = 0
+res[res=='late'] = -1
+
+# print(res, res.shape)
+# unique, counts = np.unique(res, return_counts=True)
+# print(unique, counts)
+
+changing_point = []
+new = []
+for row in res.T:
+  itemindex = np.where(row==1)[0]
+  if len(itemindex) != 0:
+    changing_point.append(itemindex[0])
+    row[itemindex[0]] = 'x'
+  new.append(row)
+# print(changing_point)
+new = np.array(new)
+print(new)
+
+new = np.where(new != 'x', 0, new)
+new = np.where(new == 'x', 1, new)
+
+res_mean = new.mean(axis=0)
+print(res_mean.shape, res_mean)
+# print(res_mean, res_mean.shape)
+# res_mean = res.mean(axis=1)
+# res_mean = (res == 'ontime').mean()
+
+plt.plot(np.array(list(ranges))/60, res_mean)
+# plt.plot(res[:, :10])
 plt.title('Randomly sampled from testing, and artificially created pred_horizon')
-plt.xlabel('pred_horizon (seconds)')
+plt.xlabel('pred_horizon (min)')
+plt.ylabel('pct')
 
 # def check_if_is_late(X, y, y_pred, late_thr):
 #   late_index = X[X['wait_before_ready_time'] < -late_thr].index
@@ -559,7 +468,7 @@ plt.xlabel('pred_horizon (seconds)')
 df_test = df.loc[test_index]
 
 df_y_pred = pd.DataFrame(data=y_pred, index=y_test.index, columns=['prediction'])
-df_test_wait = df_y_pred[df_y_pred['prediction'] == True]
+df_test_wait = df_y_pred[df_y_pred['prediction'] == 'early']
 wait_index = df_test_wait.index
 
 print('all test', df_test.shape, 'test_wait', wait_index.shape)
@@ -601,10 +510,10 @@ tips = [300, 400, 500]
 pred_horizon_sum = []
 for flf in flfs:
   for tip in tips:
-    pred_horizon_thr = (-df_pre_calculated_value['value'] 
-                        - (tip*feat_coef['tip']-feat_real_time_min_max['tip'][0])/feat_real_time_min_max['tip'][1]\
-                        - (flf*feat_coef['flf']-feat_real_time_min_max['flf'][0])/feat_real_time_min_max['flf'][1]) \
-                        / ((feat_coef['pred_horizon']-feat_real_time_min_max['pred_horizon'][0])/ feat_real_time_min_max['pred_horizon'][1])
+    pred_horizon_thr = (-df_pre_calculated_value[[0, 1, 2]] 
+                        - (tip*model_param['tip']-feat_real_time_min_max['tip'][0])/feat_real_time_min_max['tip'][1]\
+                        - (flf*model_param['flf']-feat_real_time_min_max['flf'][0])/feat_real_time_min_max['flf'][1]) \
+                        / ((model_param['pred_horizon']-feat_real_time_min_max['pred_horizon'][0])/ feat_real_time_min_max['pred_horizon'][1])
 
     pred_horizon_thr_clean = pred_horizon_thr[(pred_horizon_thr < pred_horizon_thr.quantile(.99)) & (pred_horizon_thr > pred_horizon_thr.quantile(.01))]
     pred_horizon_thr_clean.hist(alpha=0.5)
@@ -612,7 +521,7 @@ for flf in flfs:
     
 np.array(pred_horizon_sum).mean()
 
-df_pre_calculated_value['value']
+print(df_pre_calculated_value)
 
 df_tta = datasets['5_analysis_tta']
 df_tta.columns = map(str.lower, df_tta.columns)

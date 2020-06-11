@@ -184,8 +184,8 @@ clf = LogisticRegression(random_state=0, solver='saga', multi_class='multinomial
 y_pred = clf.predict(X_test_scaled)
 y_pred_proba = clf.predict_proba(X_test_scaled)
 
-print('classes', clf_reduced.classes_)
-eval_model_multi_class(y_test, y_pred, y_pred_proba, labels=clf_reduced.classes_)
+print('classes', clf.classes_)
+eval_model_multi_class(y_test, y_pred, y_pred_proba, labels=clf.classes_)
 
 # Create regularization penalty space
 penalty = ['l1', 'l2']
@@ -242,21 +242,23 @@ print('best estimator', best_model.best_params_)
 print('classes', clf_reduced.classes_)
 eval_model_multi_class(y_test, y_pred, y_pred_proba, labels=clf_reduced.classes_)
 
+clf_final = clf
+# clf_final = clf_randomsearch.best_estimator_
 #multi-class model
-coef = clf_randomsearch.best_estimator_.coef_
+coef = clf_final.coef_
 coef_hist = coef[:, :7]
 coef_realtime = coef[:, 7:]
-intercept = clf_randomsearch.best_estimator_.intercept_
+intercept = clf_final.intercept_
 print(coef_hist.shape, coef_realtime.shape, intercept.shape)
 model_param = dict(zip(cols,coef.T))
 model_param['intercept'] = intercept
 
 model_param
 
-X_test_scaled.shape, clf_randomsearch.best_estimator_.coef_.T.shape, clf_randomsearch.best_estimator_.intercept_.shape
+X_test_scaled.shape, clf_final.coef_.T.shape, clf_final.intercept_.shape
 
 # softmax, multi_class=multinomial in LR
-r = np.matmul(X_test_scaled.values, clf_randomsearch.best_estimator_.coef_.T) + clf_randomsearch.best_estimator_.intercept_
+r = np.matmul(X_test_scaled.values, clf_final.coef_.T) + clf_final.intercept_
 # print(r)
 r_exp = np.exp(r)
 # print(r_exp.shape, np.sum(r_exp, axis=1).shape)
@@ -267,7 +269,7 @@ pred_label = np.argmax(prob_softmax, axis=1)
 print(pred_label.shape)
 print(np.mean(pred_label==0))
 
-clf_randomsearch.classes_
+clf_final.classes_
 
 print(((y_pred == 'late') * (y_test == 'early')).sum()/len(y_test))
 print(((y_pred == 'early') * (y_test == 'early')).sum()/len(y_test))
@@ -305,7 +307,7 @@ print(hist_agg_value)
 assert all(df_store_level.index == hist_agg_value.index), 'unmatched index'
 
 df_pre_calculated_value = df_store_level['store_id'].to_frame().join(hist_agg_value)
-df_pre_calculated_value.columns = [['store_id'] + list(clf_randomsearch.best_estimator_.classes_)]
+df_pre_calculated_value.columns = [['store_id'] + list(clf_final.classes_)]
 print(df_pre_calculated_value)
 
 df_pre_calculated_value.mean()

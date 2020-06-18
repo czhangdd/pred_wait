@@ -1,0 +1,59 @@
+with considered_for_assignment as(
+select to_timestamp(order_ready_time) as order_ready_time_deep_red
+, delivery_id
+, rank() over(partition by delivery_id order by original_timestamp desc) as rank_order
+from segment_events.server_events_production.deep_red_delivery_considered_for_assignment 
+where ORIGINAL_TIMESTAMP > '2019-10-01'
+)
+,
+last_assign as (
+select 
+DELIVERY_ID
+, RANK() OVER (PARTITION BY delivery_id  ORDER BY TIMESTAMP DESC ) as rank_order
+, DASHER_WAIT_AT_STORE as pred_wait
+, DASHER_WAIT_AT_STORE + PARKING_DURATION as pred_wait_plus_park
+, parking_duration as pred_park
+, r2c_duration
+from segment_events.server_events_production.deep_red_assignment_info
+where original_timestamp > '2019-10-01'
+)
+,
+deliveries as(
+select 
+dd.created_at 
+, datediff('seconds', created_at, ACTUAL_PICKUP_TIME)/60 as create_to_pickup
+, datediff('seconds', actual_pickup_time, ACTUAL_DELIVERY_TIME)/60 as pickup_to_deliver 
+, datediff('seconds', created_at, order_ready_time_deep_red)/60 as estimated_prep_time
+, dateadd('seconds', {PARKING_DURATION}, DASHER_AT_STORE_TIME) as arrive_adj 
+, dateadd('seconds', -1*({PICKUP_DURATION}), actual_pickup_time) as pickup_adj
+--, datediff('seconds', least(arrive_adj, order_ready_time_deep_red), least(pickup_adj, order_ready_time_deep_red))/60 as wait_before_ready
+, datediff('seconds', greatest(order_ready_time_deep_red, arrive_adj), greatest(order_ready_time_deep_red, pickup_adj))/60 as wait_after_ready
+, dasher_wait_duration/60 as total_wait
+--, wait_before_ready + wait_after_ready + {PICKUP_DURATION}/60 + {PARKING_DURATION}/60 as wait_check
+, greatest(0,datediff('second', pickup_adj, order_ready_time_deep_red))/60 as pickup_before_ready
+, greatest(0,datediff('seconds', order_ready_time_deep_red, arrive_adj))/60 as late_arrival_min
+--, greatest(pred_wait_plus_park, 0)/60 as pred_wait_plus_park
+--, la.r2c_duration as pred_r2c
+, WAS_BATCHED
+, dd.R2C_DURATION
+from dimension_deliveries dd
+left join considered_for_assignment cfa on dd.delivery_id = cfa.delivery_id and cfa.rank_order = 1
+left join last_assign la on dd.delivery_id = la.delivery_id and la.rank_order = 1
+where is_asap = true and is_consumer_pickup = false and is_filtered = true 
+and created_at between '2019-10-01' and date_trunc('week', current_date)
+and order_protocol != 'DASHER_PLACE'
+and business_id not in (1855, 491, 10171, 47852, 7376, 5579)
+    and dasher_at_store_time is not null
+    and actual_pickup_time is not null
+) 
+select 
+date_trunc('week', created_at) as week
+--, avg(create_to_pickup) as create_to_pickup
+, avg(case when estimated_prep_time between 0 and 120 then estimated_prep_time end) as estimated_prep_time
+, avg(wait_after_ready) as wait_after_ready
+, avg(case when late_arrival_min between 0 and 120 then late_arrival_min end) as late_arrival
+, avg(pickup_to_deliver) as pickup_to_deliver_aka_r2c
+, avg(pickup_before_ready) as early_pickup
+from deliveries
+group by 1
+order by 1

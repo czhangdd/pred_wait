@@ -1,9 +1,14 @@
+set parking_duration = 0*60;
+set pickup_duration = 0*60;
+set start_time = '2020-06-15';
+set end_time = '2020-12-31';
+
 with considered_for_assignment as(
 select to_timestamp(order_ready_time) as order_ready_time_deep_red
 , delivery_id
 , rank() over(partition by delivery_id order by original_timestamp desc) as rank_order
 from segment_events.server_events_production.deep_red_delivery_considered_for_assignment 
-where ORIGINAL_TIMESTAMP > '2019-10-01'
+where ORIGINAL_TIMESTAMP > ' 2020-06-15' --'2019-10-01'
 )
 ,
 last_assign as (
@@ -24,8 +29,8 @@ dd.created_at
 , datediff('seconds', created_at, ACTUAL_PICKUP_TIME)/60 as create_to_pickup
 , datediff('seconds', actual_pickup_time, ACTUAL_DELIVERY_TIME)/60 as pickup_to_deliver 
 , datediff('seconds', created_at, order_ready_time_deep_red)/60 as estimated_prep_time
-, dateadd('seconds', {PARKING_DURATION}, DASHER_AT_STORE_TIME) as arrive_adj 
-, dateadd('seconds', -1*({PICKUP_DURATION}), actual_pickup_time) as pickup_adj
+, dateadd('seconds', $PARKING_DURATION, DASHER_AT_STORE_TIME) as arrive_adj  -- added by Chi
+, dateadd('seconds', -1*($PICKUP_DURATION), actual_pickup_time) as pickup_adj
 --, datediff('seconds', least(arrive_adj, order_ready_time_deep_red), least(pickup_adj, order_ready_time_deep_red))/60 as wait_before_ready
 , datediff('seconds', greatest(order_ready_time_deep_red, arrive_adj), greatest(order_ready_time_deep_red, pickup_adj))/60 as wait_after_ready
 , dasher_wait_duration/60 as total_wait
@@ -46,6 +51,7 @@ and business_id not in (1855, 491, 10171, 47852, 7376, 5579)
     and dasher_at_store_time is not null
     and actual_pickup_time is not null
 ) 
+
 select 
 date_trunc('week', created_at) as week
 --, avg(create_to_pickup) as create_to_pickup

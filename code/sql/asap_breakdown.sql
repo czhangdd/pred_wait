@@ -1,14 +1,34 @@
 set parking_duration = 0*60;
 set pickup_duration = 0*60;
-set start_time = '2020-06-15';
-set end_time = '2020-12-31';
+//set start_time = '2020-06-15';
+//set end_time = '2020-12-31';
+set experiment_name = 'pred_wait_based_future_dasher';
+set experiment_version = 3;
+set start_time = '2020-06-11';
+set end_time = '2030-02-01';
 
-with considered_for_assignment as(
+with result as 
+(
+select 
+assignment_run_id
+, region_id as sp_id
+, unit_id
+, max(result) as result 
+, max(se.received_at) as timing  
+from segment_events.server_events_production.switchback_exposure se 
+where experiment_name = $experiment_name
+and received_at between $start_time and $end_time
+and experiment_version=$experiment_version
+group by 1, 2, 3
+having count(distinct result) = 1 
+)
+, 
+considered_for_assignment as(
 select to_timestamp(order_ready_time) as order_ready_time_deep_red
 , delivery_id
 , rank() over(partition by delivery_id order by original_timestamp desc) as rank_order
 from segment_events.server_events_production.deep_red_delivery_considered_for_assignment 
-where ORIGINAL_TIMESTAMP > ' 2020-06-15' --'2019-10-01'
+where ORIGINAL_TIMESTAMP > $start_time
 )
 ,
 last_assign as (
@@ -19,8 +39,9 @@ DELIVERY_ID
 , DASHER_WAIT_AT_STORE + PARKING_DURATION as pred_wait_plus_park
 , parking_duration as pred_park
 , r2c_duration
-from segment_events.server_events_production.deep_red_assignment_info
-where original_timestamp > '2019-10-01'
+from segment_events.server_events_production.deep_red_assignment_info ai
+JOIN result se on ai.assignment_run_id=se.assignment_run_id and se.sp_id=ai.SP_ID
+where original_timestamp >  $start_time
 )
 ,
 deliveries as(
@@ -45,7 +66,7 @@ from dimension_deliveries dd
 left join considered_for_assignment cfa on dd.delivery_id = cfa.delivery_id and cfa.rank_order = 1
 left join last_assign la on dd.delivery_id = la.delivery_id and la.rank_order = 1
 where is_asap = true and is_consumer_pickup = false and is_filtered = true 
-and created_at between '2019-10-01' and date_trunc('week', current_date)
+and created_at between $start_time and date_trunc('week', current_date)
 and order_protocol != 'DASHER_PLACE'
 and business_id not in (1855, 491, 10171, 47852, 7376, 5579)
     and dasher_at_store_time is not null

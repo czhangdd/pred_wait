@@ -369,10 +369,10 @@ def random_search(X, y, y_extra, n_iter, n_splits):
   
   return final_results
 
-results = random_search(X_train.values, y_train.values, y_train_time.values, n_iter=100, n_splits=5)
+results = random_search(X_train.values, y_train.values, y_train_time.values, n_iter=10, n_splits=5)
 # results = random_search(X_train.values, y_train_int.values, y_train.values, n_iter=1, n_splits=2)
 
-results_sorted = results.sort_values(['score'], ascending = True) #.head(1)['parameters'].values
+results_sorted = results.sort_values(['score'], ascending = True)
 best_params = results_sorted.sort_values(['score'], ascending = True).head(1)['parameters'].values[0]
 
 print(results_sorted)

@@ -65,6 +65,7 @@ select
     cds_real_time_feat.*,
     -- feat from dd
     dd.created_at,
+    dd.actual_pickup_time,
     -- timediff(s, dd.created_at, cds_real_time_feat.order_ready_time_utc) as pred_horizon,
     timediff(s, cds_real_time_feat.ORIGINAL_TIMESTAMP, cds_real_time_feat.order_ready_time_utc) as pred_horizon,
     dd.D2R_DURATION,

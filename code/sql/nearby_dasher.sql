@@ -67,6 +67,7 @@ select
     dd.created_at,
     dd.actual_pickup_time,
     dd.dasher_at_store_time,
+    dasher_arrives_25m as dasher_at_store_25m,
     -- timediff(s, dd.created_at, cds_real_time_feat.order_ready_time_utc) as pred_horizon,
     timediff(s, cds_real_time_feat.ORIGINAL_TIMESTAMP, cds_real_time_feat.order_ready_time_utc) as pred_horizon,
     dd.D2R_DURATION,
@@ -84,7 +85,8 @@ JOIN cds_real_time_feat
   -- join with maindb_address to get store lat and long
 join maindb_address madd
     on dd.pickup_address_id = madd.id
-
+join joeharkman.fact_geofence_arrival fga
+    on dd.delivery_id = fga.delivery_id
 WHERE dd.IS_ASAP = True
   AND dd.business_id not in (185179, 12284, 12970, 10171, 9144, 8159, 206181, 1855, 115, 11671, 1798, 25117, 2764, 53152, 491, 953, 13681, 1431, 15444, 4477, 139197, 5579, 58164,42492, 5235, 1673, 3612, 3673, 8312, 47852, 12860, 1133, 6731, 3720, 4815, 7376, 1125, 12264)
   AND dd.is_filtered = TRUE

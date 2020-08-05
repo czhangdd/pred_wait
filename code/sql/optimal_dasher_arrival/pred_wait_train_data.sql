@@ -78,24 +78,21 @@ join chizhang.estimated_d2r ed2r
 )
 ,
 
--- calculate nearby featuers --
--- number of busy
--- number of idle
--- min estimated d2r for idle
--- second min estimated d2r for idle
--- third min estimated d2r for idle
-  select
-      delivery_id,
-      assignment_run_id,
-      sum(case when dasher_status = 'dasher_nearby_idle' then 1 else 0 end) as num_nearby_idle,
-      -- sum(case when dasher_status = 'dasher_busy' then 1 else 0 end) as num_busy,
-      min(estimated_d2r) as est_d2r_close_first,
-      nth_value(est_d2r, 2) over (partition by delivery_id, assignment_run_id order by estimated_d2r) as est_d2r_close_second,
-      nth_value(est_d2r, 3) over (partition by delivery_id, assignment_run_id order by estimated_d2r) as est_d2r_close_third
-  from delivery_distance
-  group by 1, 2
-  where num_nearby_idle='dasher_nearby_idle' --idle dasher only, as num_busy is not an important feat
+nth_close_dasher_d2r_all as(
+select
+   delivery_id
+,  assignment_run_id
+,  count(*) over (partition by delivery_id, assignment_run_id) as num_nearby_idle
+,  nth_value(est_d2r, 1) over(partition by delivery_id, assignment_run_id order by est_d2r) as est_d2r_first
+,  nth_value(est_d2r, 2) over(partition by delivery_id, assignment_run_id order by est_d2r) as est_d2r_second
+,  nth_value(est_d2r, 3) over(partition by delivery_id, assignment_run_id order by est_d2r) as est_d2r_third
+from delivery_distance
+  where dasher_status='dasher_nearby_idle' --get d2r for idle dasher only, as num_busy is not an important feat
+)
+  select DISTINCT * from nth_close_dasher_d2r_all
+
 );
+
 
 --------------------------------------------------------
 ------------ new optimal dasher arrival (temp) ---------

@@ -1,7 +1,10 @@
--- set data range --
+-- sp level switchback --
 set exp_start = '2020-07-10';
 set exp_end = '2020-07-16'; 
 
+-- -- store level switchback --
+-- set exp_start = '2020-06-20';
+-- set exp_end = '2020-07-15'; 
 
 ------------------------------------------------
 -------------- geo table (temp) ----------------
@@ -233,3 +236,5 @@ join chizhang.nearby_dasher dnn
 );
 
 grant select on CHIZHANG.pred_wait_final to role read_only_users;
+
+select count(*) from CHIZHANG.pred_wait_final;

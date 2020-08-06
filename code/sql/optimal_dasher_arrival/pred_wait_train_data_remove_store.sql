@@ -1,9 +1,8 @@
-drop table if exists CHIZHANG.WAIT_GEO_TABLE_REMOVE_STORE;
-create table CHIZHANG.WAIT_GEO_TABLE_REMOVE_STORE as(
+create or replace table CHIZHANG.pred_wait_final_0805_remove_store as(
 SELECT *
-FROM CHIZHANG.WAIT_GEO_TABLE
+FROM CHIZHANG.pred_wait_final_0805
 WHERE store_id NOT IN
     (SELECT store_id 
      FROM proddb.yihantan.pseudo_dasher_store_ids_v1)
 );
-grant select on CHIZHANG.WAIT_GEO_TABLE_REMOVE_STORE to role read_only_users;
+grant select on CHIZHANG.pred_wait_final_0805_remove_store to role read_only_users;

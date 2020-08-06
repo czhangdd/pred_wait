@@ -54,6 +54,7 @@ assign as (
 select 
   ai.delivery_id
   , ai.shift_id
+  , se.unit_id
   , se.date_hour
   , se.store_id
   , se.result
@@ -162,7 +163,7 @@ se.date_hour
 , xcredits_issued
 , consumer_refund
 , dd.mto 
-, dd.ONSITE_ESTIMATED_PREP_TIME
+-- , dd.ONSITE_ESTIMATED_PREP_TIME
 , dd.delivery_rating
 , case when ddi.DELIVERY_WINDOW_END_TIME is not null then 'with_end_time' 
        when ((not dd.IS_ASAP) and (not dd.IS_FROM_STORE_TO_US)) then 'scheduled_not_drive'

@@ -223,18 +223,13 @@ select * from wait_avg_store_assign
 create or replace table CHIZHANG.pred_wait_final as (
 select wt.*,
        dnn.num_nearby_idle,
-       dnn.num_busy,
-       dnn.est_d2r_min,
-       dnn.est_d2r_quater,
-       dnn.est_d2r_median,
-       dnn.estimated_d2r_close_first,
-       dnn.estimated_d2r_close_second,
-       dnn.estimated_d2r_close_thrid
+       dnn.est_d2r_first,
+       dnn.est_d2r_second,
+       dnn.est_d2r_third
 from chizhang.wait_table wt
 join chizhang.nearby_dasher dnn
-  on dnn.delivery_id = wait_table.delivery_id and
-     dnn.assignment_run_id = wait_table.assignment_run_id
-limit 10
+  on dnn.delivery_id = wt.delivery_id and
+     dnn.assignment_run_id = wt.assignment_run_id
 );
 
 grant select on CHIZHANG.pred_wait_final to role read_only_users;

@@ -241,6 +241,18 @@ join chizhang.nearby_dasher dnn
      dnn.assignment_run_id = wt.assignment_run_id
 );
 
-grant select on CHIZHANG.pred_wait_final_0820 to role read_only_users;
 
-select count(*) from CHIZHANG.pred_wait_final_0820;
+--------------------------------------
+---- final table with pdp removed ----
+--------------------------------------
+create or replace table CHIZHANG.pred_wait_final_mx_nonmx_remove_store_0826 as(
+SELECT *
+FROM CHIZHANG.pred_wait_final_mx_nonmx_0826
+WHERE store_id NOT IN
+    (SELECT store_id 
+     FROM proddb.yihantan.instant_assign_08072020)
+);
+grant select on CHIZHANG.pred_wait_final_mx_nonmx_remove_store_0826 to role read_only_users;
+
+
+select count(*) from CHIZHANG.pred_wait_final_mx_nonmx_remove_store_0826;

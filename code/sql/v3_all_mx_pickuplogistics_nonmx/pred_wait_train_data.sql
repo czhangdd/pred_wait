@@ -2,15 +2,6 @@
 set exp_start = '2020-08-01';
 set exp_end = '2020-08-15'; 
 
-
--- sp level switchback --
--- set exp_start = '2020-07-10';
--- set exp_end = '2020-07-16'; 
-
--- -- store level switchback --
--- set exp_start = '2020-06-20';
--- set exp_end = '2020-07-15'; 
-
 ------------------------------------------------
 -------------- geo table (temp) ----------------
 -------------- used by nearby dasher table -----
@@ -53,75 +44,6 @@ create or replace table chizhang.estimated_d2r as(
   and EVENT_CREATED_AT between $exp_start and $exp_end
 );
 
-
----------------------------------------------------
--------------- nearby dasher table -----------------
----------------------------------------------------
-
-create or replace table chizhang.nearby_dasher as(
--- get distance from one shift/dasher to one store, for each assignment_run_id
-with delivery_distance as (
-select
-       geo.delivery_id,
-       geo.assignment_run_id,
-       geo.shift_id,       
-       geo.IS_SHIFT_BUSY,
-       geo.shift_lat,
-       geo.shift_lng,
-       wt.EXT_POINT_LAT, --store lat
-       wt.EXT_POINT_LONG,--store long
-       haversine(shift_lat, SHIFT_LNG, EXT_POINT_LAT, EXT_POINT_LONG) as distance,
-       case when distance<2 then 1 else 0 end as is_nearby,
-       case when (is_nearby=1 and IS_SHIFT_BUSY=0) then 'dasher_nearby_idle' 
-            when IS_SHIFT_BUSY=1 then 'dasher_busy' end as dasher_status,
-       ed2r.est_d2r as est_d2r --dasher d2r
-from  chizhang.wait_table wt
-join chizhang.geo_candidate_shifts geo
-  on wt.delivery_id = geo.delivery_id and
-     wt.assignment_run_id = geo.assignment_run_id
-join chizhang.estimated_d2r ed2r
-  on  ed2r.delivery_id = geo.delivery_id
-  and ed2r.shift_id = geo.shift_id
-  and ed2r.assignment_run_id = geo.assignment_run_id
-)
-,
-
-nth_close_dasher_d2r_all as(
-select
-   delivery_id
-,  assignment_run_id
-,  count(*) over (partition by delivery_id, assignment_run_id) as num_nearby_idle
-,  nth_value(est_d2r, 1) over(partition by delivery_id, assignment_run_id order by est_d2r) as est_d2r_first
-,  nth_value(est_d2r, 2) over(partition by delivery_id, assignment_run_id order by est_d2r) as est_d2r_second
-,  nth_value(est_d2r, 3) over(partition by delivery_id, assignment_run_id order by est_d2r) as est_d2r_third
-from delivery_distance
-  where dasher_status='dasher_nearby_idle' --get d2r for idle dasher only, as num_busy is not an important feat
-)
-  select DISTINCT * from nth_close_dasher_d2r_all
-
-);
-
-
---------------------------------------------------------
------------- new optimal dasher arrival (temp) ---------
------------- from mx pickup prep time exp data ---------
------------- used by wait table ------------------------
--- consider mx + non-mx model so don't need this any more
---------------------------------------------------------
--- create or replace table chizhang.optimal_dasher_arrival_table as (
--- with mx_pickup_exp_results as (
---     -- select 'store' as exp_unit, store.* from chizhang.mx_pickup_exp_data_store store 
---     -- union all
---     select 'sp' as exp_unit, sp.* from chizhang.mx_pickup_exp_data_sp sp
--- )
--- select delivery_id, 
---     created_at, 
---     create_2_ready, 
---     create_2_ready - 165 as create_to_arrive
--- from mx_pickup_exp_results where result = 'treatment'
--- and create_2_ready is not null
--- --  limit 10
--- );
 
 
 ------------------------------------------
@@ -224,6 +146,77 @@ select * from wait_avg_store_assign
 -- select * from wait_avg_store_assign sample(20)
 --  limit 10
   );
+
+
+
+---------------------------------------------------
+-------------- nearby dasher table -----------------
+---------------------------------------------------
+
+create or replace table chizhang.nearby_dasher as(
+-- get distance from one shift/dasher to one store, for each assignment_run_id
+with delivery_distance as (
+select
+       geo.delivery_id,
+       geo.assignment_run_id,
+       geo.shift_id,       
+       geo.IS_SHIFT_BUSY,
+       geo.shift_lat,
+       geo.shift_lng,
+       wt.EXT_POINT_LAT, --store lat
+       wt.EXT_POINT_LONG,--store long
+       haversine(shift_lat, SHIFT_LNG, EXT_POINT_LAT, EXT_POINT_LONG) as distance,
+       case when distance<2 then 1 else 0 end as is_nearby,
+       case when (is_nearby=1 and IS_SHIFT_BUSY=0) then 'dasher_nearby_idle' 
+            when IS_SHIFT_BUSY=1 then 'dasher_busy' end as dasher_status,
+       ed2r.est_d2r as est_d2r --dasher d2r
+from  chizhang.wait_table wt
+join chizhang.geo_candidate_shifts geo
+  on wt.delivery_id = geo.delivery_id and
+     wt.assignment_run_id = geo.assignment_run_id
+join chizhang.estimated_d2r ed2r
+  on  ed2r.delivery_id = geo.delivery_id
+  and ed2r.shift_id = geo.shift_id
+  and ed2r.assignment_run_id = geo.assignment_run_id
+)
+,
+
+nth_close_dasher_d2r_all as(
+select
+   delivery_id
+,  assignment_run_id
+,  count(*) over (partition by delivery_id, assignment_run_id) as num_nearby_idle
+,  nth_value(est_d2r, 1) over(partition by delivery_id, assignment_run_id order by est_d2r) as est_d2r_first
+,  nth_value(est_d2r, 2) over(partition by delivery_id, assignment_run_id order by est_d2r) as est_d2r_second
+,  nth_value(est_d2r, 3) over(partition by delivery_id, assignment_run_id order by est_d2r) as est_d2r_third
+from delivery_distance
+  where dasher_status='dasher_nearby_idle' --get d2r for idle dasher only, as num_busy is not an important feat
+)
+  select DISTINCT * from nth_close_dasher_d2r_all
+
+);
+
+
+--------------------------------------------------------
+------------ new optimal dasher arrival (temp) ---------
+------------ from mx pickup prep time exp data ---------
+------------ used by wait table ------------------------
+-- consider mx + non-mx model so don't need this any more
+--------------------------------------------------------
+-- create or replace table chizhang.optimal_dasher_arrival_table as (
+-- with mx_pickup_exp_results as (
+--     -- select 'store' as exp_unit, store.* from chizhang.mx_pickup_exp_data_store store 
+--     -- union all
+--     select 'sp' as exp_unit, sp.* from chizhang.mx_pickup_exp_data_sp sp
+-- )
+-- select delivery_id, 
+--     created_at, 
+--     create_2_ready, 
+--     create_2_ready - 165 as create_to_arrive
+-- from mx_pickup_exp_results where result = 'treatment'
+-- and create_2_ready is not null
+-- --  limit 10
+-- );
 
 
 -----------------------------------

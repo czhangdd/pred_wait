@@ -25,7 +25,6 @@ select
   from Ingest_deepred_server_events_prod.event_deep_red_initial_shift_candidates
   where EVENT_CREATED_AT between $exp_start and $exp_end
   and IS_PROD='True'
-//  limit 10
 );
 
 
@@ -114,7 +113,6 @@ select delivery_id,
     create_2_ready - 165 as create_to_arrive
 from mx_pickup_exp_results where result = 'treatment'
 and create_2_ready is not null
---  limit 10
 );
 
 
@@ -131,7 +129,6 @@ select
 from segment_events.server_events_production.deep_red_munkres_considered_delivery_stats cds
     where to_timestamp_ntz(cds.TIMESTAMP) between $exp_start and $exp_end
 group by delivery_id
-//limit 10
 ),
 
 -- self join to get useful columns from cds and oca
@@ -215,9 +212,7 @@ left join avg_store_feat
 )
 
 select * from wait_avg_store_assign
--- select * from wait_avg_store_assign sample(20)
---  limit 10
-  );
+);
 
 
 -------------------------------------------------------

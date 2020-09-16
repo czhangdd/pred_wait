@@ -395,27 +395,7 @@ staging as(
 -- left join PRODDB.PUBLIC.FACT_AE_METRIC_EXP_PREDICTION_HISTORICAL mep on s.delivery_id=mep.delivery_id
 
 select
-  expt_group
-  , store_id
-  , asap
-  , dat
-  , created_at
-  , order_ready_time
-  , actual_delivery_time
-  , ACTUAL_PICKUP_TIME
-  , dasher_at_store_time
-  , datediff(second, dasher_at_store_time, order_ready_time) -165 as order_ready_minus_dasher_at_store_adj
-  , datediff(second, dasher_at_store_time, order_ready_time) as order_ready_minus_dasher_at_store
-  , pct_arrive_10min_early
-  , pct_arrive_6min_early
-  , pct_batched
-  , pct_same_block_batch
-  , pct_same_store_batch
-  , pct_packaged
-  , pct_same_block_package
-  , pct_same_store_package
-  , asap_strategic_geo
-  , tip
+ s.*
 from staging s
 where
 (asap is NULL or asap < 2*60*60) and dat <2*60*60

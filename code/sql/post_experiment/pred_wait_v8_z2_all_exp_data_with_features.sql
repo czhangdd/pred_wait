@@ -178,7 +178,7 @@ select
     timediff(s, dd.dasher_at_store_time, cds_real_time_feat.order_ready_time_utc) as wait_before_ready_time
 from PUBLIC.DIMENSION_DELIVERIES dd
 -- JOIN chizhang.future_dasher_v8_z1_delivery_ids fd
-JOIN chizhang.pred_wait_false_negatives_v8_z2 fd
+JOIN chizhang.pred_wait_v8_z2_all_exp_data fd
     ON fd.delivery_id = dd.delivery_id 
    AND fd.expt_group = 'treatment'
 JOIN cds_real_time_feat
@@ -228,7 +228,7 @@ select * from wait_avg_store_assign
 -----------------------------------
 ----------- final table -----------
 -----------------------------------
-create or replace table CHIZHANG.future_dasher_v8_z2_feature as (
+create or replace table CHIZHANG.pred_wait_v8_z2_all_exp_data_features as (
 select wt.*,
        dnn.num_nearby_idle,
        dnn.est_d2r_first,
@@ -240,6 +240,6 @@ join chizhang.nearby_dasher dnn
      dnn.assignment_run_id = wt.assignment_run_id
 );
 
-grant select on CHIZHANG.future_dasher_v8_z2_feature to role read_only_users;
+grant select on CHIZHANG.pred_wait_v8_z2_all_exp_data_features to role read_only_users;
 
-select count(*) from CHIZHANG.future_dasher_v8_z2_feature;
+select count(*) from CHIZHANG.pred_wait_v8_z2_all_exp_data_features;
